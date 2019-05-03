@@ -134,7 +134,7 @@ const replaceImage = async ({
 
   // Ignore gifs as we can't process them,
   // svgs as they are already responsive by definition
-  if (fileType !== `gif` && fileType !== `svg`) {
+  if (fileType !== `.gif` && fileType !== `.svg`) {
     const rawHTML = await generateImagesAndUpdateNode({
       formattedImgTag,
       imageNode,
