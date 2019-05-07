@@ -132,6 +132,13 @@ const replaceImage = async ({
     }); // Replace the image string
 
     if (rawHTML) thisImg.replaceWith(rawHTML);
+  } else {
+    // Replace src for gifs and svg's
+    const localSrc = await generateReplacementSrc(imageNode); // Replace the src attribute with our local copy
+
+    if (localSrc) {
+      thisImg[0].attribs.src = localSrc;
+    }
   }
 }; // Takes a node and generates the needed images and then returns
 // the needed HTML replacement for the image
@@ -189,6 +196,18 @@ const generateImagesAndUpdateNode = async function ({
   if (formattedImgTag.width) imgOptions.style.width = formattedImgTag.width;
   const ReactImgEl = React.createElement(Img.default, imgOptions, null);
   return ReactDOMServer.renderToString(ReactImgEl);
+};
+/**
+ * Grabbing a local static version of the file
+ */
+
+
+const generateReplacementSrc = async function (imageNode) {
+  if (!imageNode) {
+    return;
+  }
+
+  return `/static/${imageNode.name}-${imageNode.internal.contentDigest}${imageNode.ext}`;
 };
 
 const downloadMediaFile = async ({
