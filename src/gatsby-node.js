@@ -38,6 +38,8 @@ exports.sourceNodes = async (
       options.postTypes.includes(node.type)
   )
 
+  const mediaNodes = nodes.filter(node => node.internal.type == 'wordpress__wp_media');
+
   // we need to await transforming all the entities since we may need to get images remotely and generating fluid image data is async
   await Promise.all(
     entities.map(async entity =>
@@ -49,6 +51,8 @@ exports.sourceNodes = async (
           store,
           createNode,
           createNodeId,
+          mediaNodes,
+          nodes,
         },
         options
       )
@@ -57,7 +61,7 @@ exports.sourceNodes = async (
 }
 
 const transformInlineImagestoStaticImages = async (
-  { entity, cache, reporter, store, createNode, createNodeId },
+  { entity, cache, reporter, store, createNode, createNodeId, nodes, mediaNodes },
   options
 ) => {
   const field = entity.content
@@ -87,6 +91,8 @@ const transformInlineImagestoStaticImages = async (
         store,
         createNode,
         createNodeId,
+        nodes,
+        mediaNodes,
       })
     )
   )
@@ -103,20 +109,46 @@ const replaceImage = async ({
   createNodeId,
   reporter,
   $,
+  nodes,
+  mediaNodes,
 }) => {
   // find the full size image that matches, throw away WP resizes
   const parsedUrlData = parseWPImagePath(thisImg.attr("src"))
   const url = parsedUrlData.cleanUrl
 
-  const imageNode = await downloadMediaFile({
-    url,
+  let remoteUrl = url;
+
+  if (remoteUrl.startsWith('/wp-content/')) {
+    remoteUrl = `${options.protocol}://${options.baseUrl}${url}`;
+  }
+
+  // Try to download the media file.
+  let imageNode = await downloadMediaFile({
+    remoteUrl,
     cache,
     store,
     createNode,
     createNodeId,
   })
 
-  if (!imageNode) return
+  // Try to use the local file if the above download failed
+  if (! imageNode) {
+    if (remoteUrl.includes('wp-content')) {
+      const matchedMediaNode = mediaNodes.find(node => node.source_url == remoteUrl);
+
+      if (matchedMediaNode) {
+        const localFile = nodes.find(node => node.id == matchedMediaNode.localFile___NODE);
+
+        if (localFile) {
+          imageNode = localFile;
+        } else {
+          return;
+        }
+      }
+    } else {
+      return;
+    }
+  }
 
   let classes = thisImg.attr("class")
   let formattedImgTag = {}
@@ -129,6 +161,10 @@ const replaceImage = async ({
   if (parsedUrlData.height) formattedImgTag.height = parsedUrlData.height
 
   if (!formattedImgTag.url) return
+
+  if (! imageNode) {
+    return;
+  }
 
   const fileType = imageNode.ext
 
